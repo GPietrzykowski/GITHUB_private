@@ -1,0 +1,292 @@
+	$NOMOD51
+	#include <C8051F060.INC>
+;-------------------------------------------------------------------------------------------------------
+; DEFINICJE SYMBOLI
+;-------------------------------------------------------------------------------------------------------
+	aktywacja_backLight equ P5.3 ; obsluga podswietlenia LCD
+	TOS equ 30H ; wierzcholek stosu
+	zapal_wszystko equ 0FFH ; zapalenie wszystkich diod
+	flaga bit 0 ; definicja flagi (20H.0)
+
+	T0_TMOD equ 00010001b ; konfiguracja licznika T0 w trybie 1 (16-bitowy)
+	T0_Reload equ 65536 - 1000 ; wartosc poczatkowa licznika T0
+	Del equ 7FH ; zliczanie przerwan
+	DelReload equ 100 ; liczba przerwan do zliczenia
+;przerwanie numer 1	
+	T1_TMOD equ 2H ; konfiguracja licznika T0 w trybie 1 (16-bitowy)
+	T1_Reload equ 65536 - 1000 ; wartosc poczatkowa licznika T0
+	Del1 equ 8FH ; zliczanie przerwan
+	DelReload1 equ 100 ; liczba przerwan do zliczenia
+	;licznik equ 8
+	;flaga bit 1
+	LEDs 	equ P2.5 ; aktywacja diod LED
+	CK_D	equ P5.6 ; obsluga bufora sterujacego diodami LED
+;	K0 	equ P3.0
+;	K1 	equ P3.1
+;	K2 	equ P3.2
+;	K3 	equ P3.3
+	W1	equ 21H
+
+	licznikk equ 4
+	licznikw equ 4
+        iterator equ 0
+;	wspx	equ 21H
+;	wspy	equ 22H
+	maska	equ 11101111b
+;	flaga2 bit 1 ; definicja flagi (20H.0)
+	
+;-------------------------------------------------------------------------------------------------------
+; Umieszczenie poczatku programu pod adresem 0000H
+	cseg AT 0000h
+	jmp Poczatek ; skok do faktycznego poczatku programu
+;-------------------------------------------------------------------------------------------------------
+; Umieszczenie poczatku procedury obslugi przerwania licznika T0 pod adresem 0000BH
+	org 000BH
+	jmp Timer0_Int ; skok do faktycznego poczatku procedury obslugi
+;-------------------------------------------------------------------------------------------------------
+; Umieszczenie poczatku procedury obslugi przerwania licznika T1 pod adresem 0001BH
+	org 001BH
+	jmp Timer1_Int ; skok do faktycznego poczatku procedury obslugi
+; przerwania licznika T0
+;-------------------------------------------------------------------------------------------------------
+; konfiguracja mikrokontrolera
+;-------------------------------------------------------------------------------------------------------
+Poczatek:
+	mov WDTCN, #0DEh; wylaczenie watchdoga
+	mov WDTCN, #0ADh; wylaczenie watchdoga
+	mov SFRPAGE, #CONFIG_PAGE ;wlaczenie odpowiedniej
+; konfiguracji SFR-ow
+	mov XBR2, #040h ; wlaczenie krosownicy
+	mov R4, #licznikw
+	mov R5, #licznikk
+	mov R6, #maska
+	mov R0, #W1
+;	mov R7, #0
+	mov DPTR, #Tablica
+	
+	
+;-------------------------------------------------------------------------------------------------------
+; PROGRAM GLOWNY
+;-------------------------------------------------------------------------------------------------------
+; inicjalizacja
+	mov SP, #TOS ; inicjalizacja stosu
+	clr aktywacja_backLight ; wylaczenie podswietlania LCD
+	;clr LEDs ; uaktywnienie diod LED
+	;mov A, #zapal_wszystko ; zaladowanie samych jedynek do akumulatora
+;IMiO PW, Laboratorium TMIK, Æwiczenie 1, „Wêdruj¹ce œwiate³ko
+;16
+	mov Del, #DelReload ; zaladuj liczbe przerwan do odliczenia
+	clr flaga ; wyzerowanie flagi Ready (UWAGA! definicja symbolu jakim
+; nazywana jest flaga nie powoduje nadania jej wartosci)
+	call Timer0_Init ; wywolanie procedury konfiguracji licznika T0
+; aktywacja systemu przerwan
+	setb ET0 ; uaktywnienie przerwania licznika T0
+	setb ET1 ; uaktywnienie przerwania licznika T1
+	setb EA ; globalne uaktywnienie systemu przerwan
+;------------------------------------------------------------------------------------------------------
+; glowna petla programu
+;------------------------------------------------------------------------------------------------------
+;miga:
+;	jnb Ready, miga ; jezeli flaga Ready=0, nie rob nic
+;	cpl A ; negacja akumulatora
+;	call zapis_LED ; wywolanie procedury zapis_LED
+;	clr Ready ; wyzerowanie flagi Ready
+;	jmp miga ; skok do etykiety czeka
+;	mov P2, #0ffh
+;	mov P7, #00h
+;	clr CK_D
+;	setb CK_D
+;ETYK:	jnb Ready, ETYK
+;	jb P5.5, odwrot
+;	jnb P5.4, dalej2	
+;	CALL ZWIEKSZ
+
+;dalej2:	jmp ETYK
+	jmp $
+
+;odwrot:	CALL ODWR
+;	jmp ETYK
+;	clr P2.0
+
+;ODWR:	mov A, R6
+;	jz skok5
+;	dec R6
+;	ret
+;skok5:	mov R6, #8	
+;	ret
+
+
+;-----------------------------------------------------------------------------------------------
+; PROCEDURY
+;-----------------------------------------------------------------------------------------------
+
+WYSW:	
+	mov A, #0
+	call zapis_LED
+	mov P2, #11111110b
+	mov A, R7
+	movc A, @A+DPTR
+	call zapis_LED
+	clr flaga
+	jmp wyjscie
+
+GLOWNA:
+	jb flaga, WYSW
+
+	mov P2, #0ffh
+	mov P7, #00h
+	call zapis_LED
+wyjscie:
+	ret
+
+
+	 
+
+zapis_LED: ; wyslanie danych do diod LED
+	mov P7, A
+	nop ; ‘no operation’ - opoznienie
+	nop
+	clr CK_D ; obsluga bufora sterujacego diodami LED
+	nop ; ‘no operation’ - opoznienie
+	nop
+	setb CK_D
+ 	ret
+;-----------------------------------------------------------------------------------------------
+Timer0_Init:
+; wybranie odpowiedniej strony rejestrow specjalnych
+	mov SFRPAGE, #TIMER01_PAGE
+; skonfigurowanie licznika T0 w trybie 1 (16-bitowy)
+;	anl TMOD, #0F0H ; iloczyn logiczny zawartosci rejestru TMOD i stalej 0F0H
+	mov TMOD, #T0_TMOD ; suma logiczna zawartosci rejestru TMOD i stalej
+; T0_TMOD
+; zapisanie wartosci poczatkowej licznika
+	call Timer0_Reload
+	call Timer1_Reload
+; uruchomienie licznika
+	setb TR0 ; nadanie wartosci 1 bitowi TR0 (TCON)
+	setb TR1 ; nadanie wartosci 1 bitowi TR1 (TCON)
+; przywrocenie odpowiedniej strony rejestrow specjalnych
+	mov SFRPAGE, #CONFIG_PAGE
+	ret
+;---------------------------------------------------------------------------------------------------
+Timer0_Reload:
+; zapisanie poczatkowej wartosci rejestrow licznika
+	;JB flaga,SKOK
+	mov TH0, #High(T0_Reload) ; zapis starszego bajtu stalej T0_Reload
+;IMiO PW, Laboratorium TMIK, Æwiczenie 1, „Wêdruj¹ce œwiate³ko
+;17
+; w rejestrze TH0
+	mov TL0, #Low(T0_Reload) ; zapis mlodszego bajtu stalej T0_Reload
+	ret
+; w rejestrze TL0
+
+;---------------------------------------------------------------------------------------------------
+; procedura obslugi przerwania licznika T0
+Timer0_Int:
+	
+	mov SFRPAGE, #TIMER01_PAGE ; wybierz strone rejestrow specjalnych
+      	
+; umozliwiajaca obsluge licznika T0
+	call Timer0_Reload ; zaladuj wartosc poczatkowa do licznika T0
+	mov SFRPAGE, #CONFIG_PAGE ; wroc do wlasciwej strony rejestrow
+; specjalnych
+	call GLOWNA
+
+	djnz Del, Timer0_Int_Exit ; jezeli nie odliczono zadanej liczby przerwan
+; wyjdz z procedury
+	mov Del, #DelReload ; zaladuj liczbe przerwan do odliczenia
+	
+Timer0_Int_Exit:
+	reti ; wroc z procedury obslugi przerwania
+;----------------------------------------------------------------
+
+
+
+
+
+
+
+Timer1_Reload:
+; zapisanie poczatkowej wartosci rejestrow licznika
+	;JB flaga,SKOK
+	mov TH1, #High(T1_Reload) ; zapis starszego bajtu stalej T0_Reload
+;IMiO PW, Laboratorium TMIK, Æwiczenie 1, „Wêdruj¹ce œwiate³ko
+;17
+; w rejestrze TH1
+	mov TL1, #Low(T1_Reload) ; zapis mlodszego bajtu stalej T0_Reload
+	ret
+; w rejestrze TL0
+
+;---------------------------------------------------------------------------------------------------
+; procedura obslugi przerwania licznika T1
+Timer1_Int:
+	
+	mov SFRPAGE, #TIMER01_PAGE ; wybierz strone rejestrow specjalnych
+      	
+; umozliwiajaca obsluge licznika T0
+	call Timer1_Reload ; zaladuj wartosc poczatkowa do licznika T0
+;	mov SFRPAGE, #CONFIG_PAGE ; wroc do wlasciwej strony rejestrow
+; specjalnych
+;===========OBSLUGA KLAWIATURY===============
+;	mov R5, #maska;
+	
+	
+;testowanie kolumn
+petla1:	
+	mov P3, R6;wymuszenie wiersza
+	
+
+;	mov SFRPAGE, #CONFIG_PAGE ;wlaczenie odpowiedniej
+	mov A, P3
+	nop
+	mov R5, #licznikk
+	mov R0, A
+petla2: 	
+	jnb ACC.0, dekod; jesli jest 0 to zaczynamy dekodowac
+
+	rr A
+	djnz R5, petla2	
+	;//do odkomentowania\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+	;mov R6,#maska	
+	
+	mov A, R6
+	rl A; rolowanie akumulatora 
+	mov R6, A
+	inc R0
+	djnz R4, petla1;licznikw
+	jmp wyj
+	;ret	
+dekod:	mov A, P3
+	mov R0, A
+	mov A, #4
+	clr C
+	subb A, R5;sprawdzamy ktora kolumna (od lewej);0
+	mov B, #4
+	mul AB;0
+	add A, #4;5
+	clr C
+	subb A, R4;sprawdzamy ktory wiersz (od gory);1
+	mov R7, A
+	setb flaga
+
+;call 	WYSW
+
+wyj:	mov R4, #licznikw
+	mov R6, #maska
+	
+	
+
+	;ret
+	
+;
+	djnz Del1, Timer1_Int_Exit ; jezeli nie odliczono zadanej liczby przerwan
+; wyjdz z procedury
+	mov Del1, #DelReload1 ; zaladuj liczbe przerwan do odliczenia
+
+Timer1_Int_Exit:
+	reti ; wroc z procedury obslugi przerwania
+;----------------------------------------------------------------
+Tablica:
+	db 07H, 66H, 06H, 3FH, 7FH, 6DH, 5BH, 77H, 6FH, 7DH, 4FH, 7CH, 71H, 79H, 5EH, 58H 
+;---------------------------------------------------------------------------------------------------
+	end

@@ -1,0 +1,4 @@
+ENKPWM_libF3.c:9:6:ENK_Init	16	static
+ENKPWM_libF3.c:22:6:HAL_TIM_IC_CaptureCallback	16	static
+ENKPWM_libF3.c:72:6:HAL_TIM_PeriodElapsedCallback	0	static
+ENKPWM_libF3.c:89:6:frequency_ret	12	static
